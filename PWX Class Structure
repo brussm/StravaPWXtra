@@ -1,0 +1,96 @@
+import glob
+import datetime
+import xml.etree.ElementTree as ET
+import os
+
+class PWXtra:
+    def __init__(self, date=None):
+        if date is None:
+            self.date = datetime.datetime.today().strftime('%Y_%m_%d')
+        else:
+            self.date = date
+        self.path = '/Users/brussm/anaconda/PWX_Files'
+        
+    def get_files(self):
+        self.pwx_files = glob.glob(self.path +'/*'+ self.date+'*.pwx')
+        return self.pwx_files
+    
+    #Returns a datetime object
+    def get_file_datetime(self, pwx_file):
+        tree = ET.parse(pwx_file)
+        text_time = tree.find('{http://www.peaksware.com/PWX/1/0}workout/{http://www.peaksware.com/PWX/1/0}time').text
+        return datetime.datetime.strptime(text_time, "%Y-%m-%dT%H:%M:%S")
+    
+    def get_last_offset(self, pwx_file):
+        offset = '{http://www.peaksware.com/PWX/1/0}workout/{http://www.peaksware.com/PWX/1/0}sample/{http://www.peaksware.com/PWX/1/0}timeoffset'
+        tree = ET.parse(pwx_file)
+        self.last_offset = float(tree.findall(offset)[-1].text)
+        return self.last_offset
+    
+    def get_last_sample_index(self, pwx_file):
+        sample = '{http://www.peaksware.com/PWX/1/0}workout/{http://www.peaksware.com/PWX/1/0}sample'
+        treeA = ET.parse(pwx_file)
+        #rootA = treeA.getroot()
+        spotA = treeA.findall(sample)[-1]
+        self.insert_spot = list(treeA.findall(sample)).index(spotA)
+        return self.insert_spot
+    
+    def get_points(self, pwx_file):
+        points = '{http://www.peaksware.com/PWX/1/0}workout/{http://www.peaksware.com/PWX/1/0}extension/{http://www.peaksware.com/PWX/1/0}points'
+        tree = ET.parse(pwx_file)
+        data_points = int(tree.find(points).text)
+        return data_points
+    
+    def chrono_reorder(self):
+        self.chrono_pwxers = []
+        pwxers = self.get_files()
+        while len(pwxers)>1:
+            oldest_time = test.get_file_datetime(pwxers[0])
+            for phile in pwxers:
+                if self.get_file_datetime(phile) <= oldest_time:
+                    oldest_file = phile
+                    oldest_time = self.get_file_datetime(phile)
+            self.chrono_pwxers.append(pwxers.pop(pwxers.index(oldest_file)))
+        self.chrono_pwxers.append(pwxers.pop(0)) #Get the last file left in pwxers
+        return self.chrono_pwxers
+    
+    #This Method Not Currently Used/ Probably not necessary
+    def add_offset(self, elementtree):
+        offset = '{http://www.peaksware.com/PWX/1/0}workout/{http://www.peaksware.com/PWX/1/0}sample/{http://www.peaksware.com/PWX/1/0}timeoffset/'
+        sample = '{http://www.peaksware.com/PWX/1/0}workout/{http://www.peaksware.com/PWX/1/0}sample'
+        for elem in elementtree.findall(sample):
+            new_timeoffset = float(elem.find('{http://www.peaksware.com/PWX/1/0}timeoffset').text) + 0.003 
+            #elem.text = str(new_timeoffset)
+            elem.set('{http://www.peaksware.com/PWX/1/0}timeoffset', str(new_timeoffset))
+            #print elem.text
+            
+    def combine_pwx_files(self, chrono_list_of_files):
+        sample_elem = '{http://www.peaksware.com/PWX/1/0}workout/{http://www.peaksware.com/PWX/1/0}sample'
+        offset_elem = '{http://www.peaksware.com/PWX/1/0}timeoffset'
+
+        treeA = ET.parse(chrono_list_of_files[0])
+        rootA = treeA.getroot()
+
+        count = 0
+        offset = 0.0
+
+        for pwx in range(0,len(chrono_list_of_files)-1):
+            treeB = ET.parse(chrono_list_of_files[count+1]) 
+            rootB = treeB.getroot()
+
+            offset += test.get_last_offset(chrono_list_of_files[count])
+            count+=1
+    
+            for elem in treeB.findall(sample_elem):
+                if float(elem.find(offset_elem).text) > 1.0:
+                    new_timeoffset = float(elem.find(offset_elem).text) + offset 
+                    elem.find(offset_elem).text = str(new_timeoffset)
+                    resultB = elem
+                    rootA[0].insert(-1,resultB)         
+
+        print ET.tostring(rootA) 
+        os.chdir(self.path)
+        treeA.write('combinedPWX_'+ datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')+'.pwx')
+        os.chdir('/Users/brussm/anaconda')
+        print os.getcwd()
+        # could use os.chdir to save to a specific location, then change it back.
